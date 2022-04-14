@@ -9,10 +9,13 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <fcntl.h>
+
 #include "common.h"
 #include "server.h"
 #include "arguments.h"
 #include "parser.h"
+
 
 void* client_subroutine(void* client_fd);
 void* accept_clients_routine(void* arguments);
@@ -143,12 +146,40 @@ void execute_command(struct command* command, int clientFd) {
 		exit(0);
 	}
 
+	
+
 	pid_t pid = fork();
 	if (pid == 0) {
 		// New process - child
-		dup2(clientFd, 0);
-		dup2(clientFd, 1);
-		dup2(clientFd, 2);
+		int outputRedirectFd = clientFd;
+		int inputRedirectFd = clientFd;
+
+		if (command->outputRedirect != NULL) {
+			outputRedirectFd = open(command->outputRedirect, O_CREAT | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+			if (outputRedirectFd < 0) {
+				perror("output redirect open");
+				return;
+			}
+		}
+		
+		if (dup2(outputRedirectFd, STDOUT_FILENO) < 0) {
+			perror("dup output");
+		}
+
+		if (command->inputRedirect != NULL) {
+			inputRedirectFd = open(command->inputRedirect, O_RDONLY);
+			if (inputRedirectFd < 0) {
+				perror("input redirect open");
+				return;
+			}
+		}
+		
+		if (dup2(inputRedirectFd, STDIN_FILENO) < 0) {
+			perror("dup input");
+		}
+
+		close(inputRedirectFd);
+		close(outputRedirectFd);
 
 		if (execvp(command->arguments[0], command->arguments) == -1) {
 			perror("exec");

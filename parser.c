@@ -104,9 +104,10 @@ struct command* parse_command(char* commandString) {
 	char* currentStart = commandString;
 	int length = 0;
 	int index = 0;
+	int maxIndex = strlen(commandString);
 	char currentChar;
 	int currentCharIndex = 0;
-	while ((currentChar = commandString[currentCharIndex]) != 0) {
+	while ((currentChar = commandString[currentCharIndex]) != 0 && currentCharIndex < maxIndex) {
 		if (currentChar == '>' || (currentChar == ' ' && commandString[currentCharIndex + 1] == '>')) {
 			char* argument = calloc(length + 1, sizeof(char));
 			memcpy(argument, currentStart, length);
@@ -127,15 +128,19 @@ struct command* parse_command(char* commandString) {
 
 			char* redirect = calloc(length + 1, sizeof(char));
 			memcpy(redirect, currentStart, length);
-			command->outputRedirectTarget = redirect;
+			command->outputRedirect = redirect;
 
 			length = 0;
 		}
 		else if (currentChar == '<' || (currentChar == ' ' && commandString[currentCharIndex + 1] == '<')) {
 
 		}
+		currentChar = commandString[currentCharIndex];
 
-		if (currentChar == ' ') {
+		if (currentChar == ' ' || currentCharIndex + 1 == maxIndex) {
+			if (commandString[currentCharIndex + 1] == 0 && commandString[currentCharIndex] != ' ') {
+				length++;
+			}
 			char* argument = calloc(length + 1, sizeof(char));
 			memcpy(argument, currentStart, length);
 			arguments[argumentsIndex++] = argument;
@@ -147,7 +152,7 @@ struct command* parse_command(char* commandString) {
 		}
 		currentCharIndex++;
 		length++;
-	} 
+	}
 
 	command->arguments = arguments;
 	command->numArguments = argumentsIndex;
@@ -161,8 +166,8 @@ void free_command(struct command* cmd)
 		free(cmd->arguments[i]);
 	}
 	free(cmd->rawCommand);
-	free(cmd->inputRedirectTarget);
-	free(cmd->outputRedirectTarget);
+	free(cmd->inputRedirect);
+	free(cmd->outputRedirect);
 }
 
 void append_command(struct command* source, struct command* append)

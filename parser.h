@@ -6,8 +6,9 @@ struct command {
 	char** arguments;
 	int numArguments;
 
-	char* inputRedirectTarget;
-	char* outputRedirectTarget;
+	char* inputRedirect;
+	char* outputRedirect;
+	char* pipeRedirect;
 
 	struct command* nextCommand;
 };
