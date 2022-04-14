@@ -1,4 +1,48 @@
-﻿#include "kshell.h"
+﻿/**
+* Part 1 assignment
+* Napíšte v jazyku C jednoduchý interaktívny program, "shell", ktorý bude opakovane čakať na
+* zadanie príkazu a potom ho spracuje. Na základe princípov klient-server architektúry tak musí
+* s pomocou argumentov umožňovať funkciu servera aj klienta. Program musí umožňovať
+* spúšťať zadané príkazy a bude tiež interpretovať aspoň nasledujúce špeciálne znaky: # ; < >
+* | \ . Príkazy musí byť možné zadať zo štandardného vstupu a tiež zo spojení
+* reprezentovaných soketmi. Na príkazovom riadku musí byť možné špecifikovať
+* prepínačom -p port číslo portu a/alebo prepínačom -u cesta názov lokálneho soketu na
+* ktorých bude program čakať na prichádzajúce spojenia. Po spustení s prepínačom -h sa musia
+* vypísať informácie o autorovi, účele a použití programu, zoznam príkazov. "Shell" musí
+* poskytovať aspoň nasledujúce interné príkazy: help - výpis informácií ako pri -h, quit -
+* ukončenie spojenia z ktorého príkaz prišiel, halt - ukončenie celého programu.
+* Prednastavený prompt musí pozostávať z mena používateľa, názvu stroja, aktuálneho času a
+* zvoleného ukončovacieho znaku, e.g. '16:34 user17@student#'. Na zistenie týchto informácií
+* použite vhodné systémové volania s použitím knižničných funkcií. Na formátovanie výstupu,
+* zistenie mena používateľa z UID a pod. môžte v programe využiť bežné knižničné funkcie.
+* Spúšťanie príkazov a presmerovanie súborov musia byť implementované pomocou príslušných
+* systémových volaní. Tie nemusia byť urobené priamo (cez assembler), avšak knižničná
+* funkcia popen(), prípadne podobná, nesmie byť použitá. Pri spustení programu bez
+* argumentov, alebo s argumentom "-s" sa program bude správať vyššie uvedeným spôsobom,
+* teda ako server. S prepínačom "-c" sa bude správať ako klient, teda program nadviaže
+* spojenie so serverom cez socket, do ktorého bude posielať svoj štandardný vstup a čítať dáta
+* pre výstup. Chybové stavy ošetrite bežným spôsobom. Počas vytvárania programu (najmä
+* kompilácie) sa nesmú zobrazovať žiadne varovania a to ani pri zadanom prepínači
+* prekladača -Wall.
+* Vo voliteľných častiach zadania sa očakáva, že tie úlohy budú mať vaše vlastné riešenia, nie
+* jednoduché volania OS.
+* 
+* Nasledujúce časti predstavujú povinné minimum pre akceptovanie funkčného zadania a
+* po splnení budú hodnotené 6 bodmi.
+* spracovanie argumentov, spracovanie zadaného vstupného riadku, interné
+* príkazy help, halt, quit.
+* * overenie činnosti a spustenie zadaných príkazov, presmerovanie
+* (volania fork, exec, wait, pipe, dup).
+* * sokety, spojenia
+* (volania socket, listen, accept, bind, connect, select, read, write); systémové
+* volania pre prompt.
+*
+* Part 2 features
+* * Switch -i for specifying IP addresses
+* 
+* */
+
+#include "kshell.h"
 #include "common.h"
 #include "arguments.h"
 #include <stdio.h>
