@@ -96,29 +96,61 @@ struct command* parse_command(char* commandString) {
 
 	char* raw = calloc(strlen(commandString) + 1, sizeof(char));
 	strcpy(raw, commandString);
+	command->rawCommand = raw;
 
 	char** arguments = calloc(50, sizeof(char*));
+	int argumentsIndex = 0;
+
+	char* currentStart = commandString;
+	int length = 0;
 	int index = 0;
-	// TODO redirect detection
+	char currentChar;
+	int currentCharIndex = 0;
+	while ((currentChar = commandString[currentCharIndex]) != 0) {
+		if (currentChar == '>' || (currentChar == ' ' && commandString[currentCharIndex + 1] == '>')) {
+			char* argument = calloc(length + 1, sizeof(char));
+			memcpy(argument, currentStart, length);
+			arguments[argumentsIndex++] = argument;
+			length = 0;
 
-	char* token = strtok(commandString, " ");
-	if (token != NULL) {
-		char* str = calloc(strlen(token) + 1, sizeof(char));
-		strcpy(str, token);
-		arguments[index++] = str;
-	}
+			if (currentChar == ' ' && commandString[currentCharIndex + 1] == '>') { currentCharIndex++; }
+			currentCharIndex++;
 
-	token = strtok(NULL, " ");
-	while (token != NULL) {
-		char* str = calloc(strlen(token) + 1, sizeof(char));
-		strcpy(str, token);
-		arguments[index++] = str;
-		token = strtok(NULL, " ");
-	}
+			if (commandString[currentCharIndex] == ' ') { currentCharIndex++; }
+			while (commandString[currentCharIndex] == ' ' && commandString[currentCharIndex] == 0) { currentCharIndex++; }
+			currentStart = &(commandString[currentCharIndex]);
 
-	command->rawCommand = raw;
+			while (commandString[currentCharIndex] != 0  && commandString[currentCharIndex] != ' ') {
+				currentCharIndex++;
+				length++;
+			}
+
+			char* redirect = calloc(length + 1, sizeof(char));
+			memcpy(redirect, currentStart, length);
+			command->outputRedirectTarget = redirect;
+
+			length = 0;
+		}
+		else if (currentChar == '<' || (currentChar == ' ' && commandString[currentCharIndex + 1] == '<')) {
+
+		}
+
+		if (currentChar == ' ') {
+			char* argument = calloc(length + 1, sizeof(char));
+			memcpy(argument, currentStart, length);
+			arguments[argumentsIndex++] = argument;
+
+			currentStart += length + 1;
+			length = 0;
+			currentCharIndex++;
+			continue;
+		}
+		currentCharIndex++;
+		length++;
+	} 
+
 	command->arguments = arguments;
-	command->numArguments = index;
+	command->numArguments = argumentsIndex;
 
 	return command;
 }
@@ -148,7 +180,7 @@ char* strip_comments(char* input) {
 	char currentChar;
 	while ((currentChar = input[index]) != 0) {	// Until we reach end of string
 		if (currentChar == 9 || currentChar == ' ') {	// If current character is a space or tabulator
-			if (input[index + 1] == 35) {	// if this is space before hashtag, end was at previous iteration
+			if (input[index + 1] == '#') {	// if this is space before hashtag, end was at previous iteration
 				break;
 			}
 
@@ -160,7 +192,7 @@ char* strip_comments(char* input) {
 			continue;
 		}
 
-		if (input[index] == 35) {
+		if (input[index] == '#') {
 			break;
 		}
 
