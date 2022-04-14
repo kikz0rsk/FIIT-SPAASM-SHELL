@@ -14,7 +14,7 @@ struct command {
 };
 
 void free_command(struct command* cmd);
-void append_command(struct command* source, struct command* append);
+void append_command(struct command** source, struct command* append);
 
 char* strip_comments(char* original);
 struct command* parse_input(char* ln);

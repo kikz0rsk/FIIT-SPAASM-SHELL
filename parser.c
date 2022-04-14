@@ -28,65 +28,50 @@ struct command* parse_commands(char* ln) {
 	int maxIndex = strlen(ln);
 	int index = 0;
 	char currentChar;
-	while ((currentChar = ln[index]) != 0 && index <= maxIndex) {
-		if (currentChar == ' ') {
-			if (ln[index + 1] == ';') {
+	int skipSpaces = true;
+	while (index <= maxIndex) {
+		if (ln[index] == 0) {
+			if (length > 0) {
 				char* cmdString = calloc(length + 1, sizeof(char));
 				memcpy(cmdString, start, length);
 				struct command* cmd = parse_command(cmdString);
-
-				if (commands == NULL) {
-					commands = cmd;
-				}
-				else {
-					append_command(commands, cmd);
-				}
-
+				append_command(&commands, cmd);
 				safe_free((void**)&cmdString);
+			}
 
-				start = start + length + 3;
-				index += 2;
-				length = 0;
+			break;
+		}
+
+		currentChar = ln[index];
+
+		if (currentChar == ' ') {
+			if (skipSpaces) {
+				index++;
+				start = start + 1;
 				continue;
 			}
+		}
+		else {
+			skipSpaces = false;
 		}
 
 		if (currentChar == ';') {
 			char* cmdString = calloc(length + 1, sizeof(char));
 			memcpy(cmdString, start, length);
 			struct command* cmd = parse_command(cmdString);
-
-			if (commands == NULL) {
-				commands = cmd;
-			}
-			else {
-				append_command(commands, cmd);
-			}
-
+			append_command(&commands, cmd);
 			safe_free((void**)&cmdString);
 
 			start = start + length + 1;
 			index++;
 			length = 0;
+			skipSpaces = 1;
 			continue;
 		}
 
 		index++;
 		length++;
 	}
-
-	char* cmdString = calloc(length + 1, sizeof(char));
-	memcpy(cmdString, start, length);
-	struct command* cmd = parse_command(cmdString);
-
-	if (commands == NULL) {
-		commands = cmd;
-	}
-	else {
-		append_command(commands, cmd);
-	}
-
-	safe_free((void**)&cmdString);
 
 	return commands;
 }
@@ -170,9 +155,14 @@ void free_command(struct command* cmd)
 	free(cmd->outputRedirect);
 }
 
-void append_command(struct command* source, struct command* append)
+void append_command(struct command** source, struct command* append)
 {
-	struct command* cmd = source;
+	if (*source == NULL) {
+		*source = append;
+		return;
+	}
+
+	struct command* cmd = *source;
 	while (cmd->nextCommand != NULL) { cmd = cmd->nextCommand; }
 	cmd->nextCommand = append;
 }
