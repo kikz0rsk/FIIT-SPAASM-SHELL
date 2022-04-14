@@ -166,6 +166,10 @@ void execute_command(struct command* command, int clientFd) {
 			perror("dup output");
 		}
 
+		if (dup2(outputRedirectFd, STDERR_FILENO) < 0) {
+			perror("dup output");
+		}
+
 		if (command->inputRedirect != NULL) {
 			inputRedirectFd = open(command->inputRedirect, O_RDONLY);
 			if (inputRedirectFd < 0) {
