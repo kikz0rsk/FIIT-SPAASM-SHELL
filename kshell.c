@@ -40,7 +40,8 @@
 * Part 2 features
 * * Switch -i for specifying IP addresses
 * 
-* */
+* 
+*/
 
 #include "kshell.h"
 #include "common.h"
@@ -51,7 +52,7 @@
 #include "server.h"
 #include "client.h"
 
-int main(int argc, char** argv)
+int main_(int argc, char** argv)
 {
 	struct arguments args = { argc, argv };
 

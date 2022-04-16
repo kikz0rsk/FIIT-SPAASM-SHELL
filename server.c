@@ -15,6 +15,7 @@
 #include "server.h"
 #include "arguments.h"
 #include "parser.h"
+#include "kshell.h"
 
 
 void* client_subroutine(void* client_fd);
@@ -120,24 +121,7 @@ void* client_subroutine(void* _clientFd) {
 }
 
 void execute_command(struct command* command, int clientFd) {
-	if (strcmp(command->arguments[0], "echo") == 0) {
-		char allArguments[1024] = { 0 };
-
-		if (command->arguments > 0) {
-			strcat(allArguments, command->arguments[1]);
-			for (int i = 2; i < command->numArguments; i++) {
-				char* tmp;
-				asprintf(&tmp, " %s", command->arguments[i]);
-				strcat(allArguments, tmp);
-				safe_free((void**)&tmp);
-			}
-		}
-
-		strcat(allArguments, "\n");
-		write(clientFd, allArguments, strlen(allArguments));
-		return;
-	}
-	else if (strcmp(command->arguments[0], "quit") == 0) {
+	if (strcmp(command->arguments[0], "quit") == 0) {
 		close(clientFd);
 		return;
 	}
@@ -145,12 +129,49 @@ void execute_command(struct command* command, int clientFd) {
 		close(clientFd);
 		exit(0);
 	}
-
-	
+	else if (strcmp(command->arguments[0], "help") == 0) {
+		char* help = get_help();
+		write(clientFd, help, strlen(help) + 1);
+		return;
+	}
 
 	pid_t pid = fork();
 	if (pid == 0) {
-		// New process - child
+		// Child
+
+		if (command->pipeRedirect != NULL) {
+			int pipes[2];
+			pipe(pipes);
+
+			pid_t children = fork();
+			if (children < 0) {
+				perror("pipe fork");
+				exit(-1);
+			}
+
+			if (children == 0) {
+				// Child (command after pipe sign)
+				dup2(pipes[0], STDIN_FILENO);
+				close(pipes[1]);
+				dup2(clientFd, STDOUT_FILENO);
+				dup2(clientFd, STDERR_FILENO);
+				if (execvp(command->pipeRedirect->arguments[0], command->pipeRedirect->arguments) == -1) {
+					perror("exec");
+				}
+				exit(-1);
+			}
+
+			// Parent
+			dup2(pipes[1], STDOUT_FILENO);
+			close(pipes[0]);
+			dup2(clientFd, STDERR_FILENO);
+			dup2(clientFd, STDIN_FILENO);
+			if (execvp(command->arguments[0], command->arguments) == -1) {
+				perror("exec");
+			}
+			exit(-1);
+		}
+
 		int outputRedirectFd = clientFd;
 		int inputRedirectFd = clientFd;
 
@@ -161,7 +182,7 @@ void execute_command(struct command* command, int clientFd) {
 				return;
 			}
 		}
-		
+
 		if (dup2(outputRedirectFd, STDOUT_FILENO) < 0) {
 			perror("dup output");
 		}
@@ -177,7 +198,7 @@ void execute_command(struct command* command, int clientFd) {
 				return;
 			}
 		}
-		
+
 		if (dup2(inputRedirectFd, STDIN_FILENO) < 0) {
 			perror("dup input");
 		}

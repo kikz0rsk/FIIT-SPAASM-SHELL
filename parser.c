@@ -10,27 +10,29 @@ struct command* parse_command(char* commandString);
 
 struct command* parse_input(char* ln) {
 	char* stripped = strip_comments(ln);
-
 	if (strlen(stripped) == 0) {
 		return NULL;
 	}
 
 	struct command* commands = parse_commands(stripped);
+	free(stripped);
 
 	return commands;
 }
 
 struct command* parse_commands(char* ln) {
+	char* input = remove_whitespaces(ln);
+
 	struct command* commands = NULL;
 
-	char* start = ln;
+	char* start = input;
 	int length = 0;
-	int maxIndex = strlen(ln);
+	int maxIndex = strlen(input);
 	int index = 0;
 	char currentChar;
 	int skipSpaces = true;
 	while (index <= maxIndex) {
-		if (ln[index] == 0) {
+		if (input[index] == 0) {
 			if (length > 0) {
 				char* cmdString = calloc(length + 1, sizeof(char));
 				memcpy(cmdString, start, length);
@@ -42,7 +44,7 @@ struct command* parse_commands(char* ln) {
 			break;
 		}
 
-		currentChar = ln[index];
+		currentChar = input[index];
 
 		if (currentChar == ' ') {
 			if (skipSpaces) {
@@ -55,33 +57,40 @@ struct command* parse_commands(char* ln) {
 			skipSpaces = false;
 		}
 
-		if (currentChar == ';') {
+		if (currentChar == ';' || currentChar == '|') {
 			char* cmdString = calloc(length + 1, sizeof(char));
 			memcpy(cmdString, start, length);
 			struct command* cmd = parse_command(cmdString);
 			append_command(&commands, cmd);
 			safe_free((void**)&cmdString);
 
-			start = start + length + 1;
-			index++;
-			length = 0;
-			skipSpaces = 1;
-			continue;
+			if (currentChar == ';') {
+				start = start + length + 1;
+				index++;
+				length = 0;
+				skipSpaces = 1;
+				continue;
+			}
+			else {
+				start = start + length + 1;
+				cmd->pipeRedirect = parse_commands(start);
+				break;
+			}
 		}
 
 		index++;
 		length++;
 	}
 
+	free(input);
 	return commands;
 }
 
 struct command* parse_command(char* commandString) {
 	struct command* command = calloc(1, sizeof(struct command));
 
-	char* raw = calloc(strlen(commandString) + 1, sizeof(char));
-	strcpy(raw, commandString);
-	command->rawCommand = raw;
+	commandString = remove_whitespaces(commandString);
+	command->rawCommand = commandString;
 
 	char** arguments = calloc(50, sizeof(char*));
 	int argumentsIndex = 0;
@@ -92,50 +101,40 @@ struct command* parse_command(char* commandString) {
 	int maxIndex = strlen(commandString);
 	char currentChar;
 	int currentCharIndex = 0;
-	while ((currentChar = commandString[currentCharIndex]) != 0 && currentCharIndex < maxIndex) {
-		if (currentChar == '>' || (currentChar == ' ' && commandString[currentCharIndex + 1] == '>')) {
+	while (index <= maxIndex) {
+		currentChar = commandString[index];
+
+		if (currentChar == '>' || currentChar == '<') {
+			char prev = currentChar;
+			/*char prev = currentChar;
+			commandString[index] = 0;
+
+			char* argument = remove_whitespaces(currentStart);
+			arguments[argumentsIndex++] = argument;
+			commandString[index] = prev;*/
+
+			index++;
+			currentStart = &(commandString[index]);
+			char* redirectTarget = remove_whitespaces(currentStart);
+			if (prev == '>') {
+				command->outputRedirect = redirectTarget;
+			}
+			else if (prev == '<') {
+				command->inputRedirect = redirectTarget;
+			}
+			break;
+		} else if (currentChar == ' ' || currentChar == 0) {
 			char* argument = calloc(length + 1, sizeof(char));
 			memcpy(argument, currentStart, length);
 			arguments[argumentsIndex++] = argument;
+			
 			length = 0;
-
-			if (currentChar == ' ' && commandString[currentCharIndex + 1] == '>') { currentCharIndex++; }
-			currentCharIndex++;
-
-			if (commandString[currentCharIndex] == ' ') { currentCharIndex++; }
-			while (commandString[currentCharIndex] == ' ' && commandString[currentCharIndex] == 0) { currentCharIndex++; }
-			currentStart = &(commandString[currentCharIndex]);
-
-			while (commandString[currentCharIndex] != 0  && commandString[currentCharIndex] != ' ') {
-				currentCharIndex++;
-				length++;
-			}
-
-			char* redirect = calloc(length + 1, sizeof(char));
-			memcpy(redirect, currentStart, length);
-			command->outputRedirect = redirect;
-
-			length = 0;
-		}
-		else if (currentChar == '<' || (currentChar == ' ' && commandString[currentCharIndex + 1] == '<')) {
-
-		}
-		currentChar = commandString[currentCharIndex];
-
-		if (currentChar == ' ' || currentCharIndex + 1 == maxIndex) {
-			if (commandString[currentCharIndex + 1] == 0 && commandString[currentCharIndex] != ' ') {
-				length++;
-			}
-			char* argument = calloc(length + 1, sizeof(char));
-			memcpy(argument, currentStart, length);
-			arguments[argumentsIndex++] = argument;
-
-			currentStart += length + 1;
-			length = 0;
-			currentCharIndex++;
+			index++;
+			currentStart = &(commandString[index]);
 			continue;
 		}
-		currentCharIndex++;
+
+		index++;
 		length++;
 	}
 
@@ -143,6 +142,25 @@ struct command* parse_command(char* commandString) {
 	command->numArguments = argumentsIndex;
 
 	return command;
+}
+
+char* remove_whitespaces(char* input) {
+	char* start = input;
+	int length = strlen(input);
+	while ((start[0] == ' ' || start[0] == '\t') && length > 0) {
+		start += 1;
+		length--;
+	}
+
+	char* end = start + length - 1;
+	while ((end[0] == ' ' || end[0] == '\t') && length > 0) {
+		end -= 1;
+		length--;
+	}
+
+	char* output = calloc(length + 1, sizeof(char));
+	memcpy(output, start, length);
+	return output;
 }
 
 void free_command(struct command* cmd)
@@ -153,6 +171,7 @@ void free_command(struct command* cmd)
 	free(cmd->rawCommand);
 	free(cmd->inputRedirect);
 	free(cmd->outputRedirect);
+	free_command(cmd->inputRedirect);
 }
 
 void append_command(struct command** source, struct command* append)
