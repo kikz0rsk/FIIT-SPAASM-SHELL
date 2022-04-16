@@ -171,7 +171,10 @@ void free_command(struct command* cmd)
 	free(cmd->rawCommand);
 	free(cmd->inputRedirect);
 	free(cmd->outputRedirect);
-	free_command(cmd->inputRedirect);
+
+	if (cmd->pipeRedirect != NULL) {
+		free_command(cmd->pipeRedirect);
+	}
 }
 
 void append_command(struct command** source, struct command* append)

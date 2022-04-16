@@ -38,9 +38,9 @@
 * volania pre prompt.
 *
 * Part 2 features
-* * Switch -i for specifying IP addresses
-* 
-* 
+* * Switch -i for specifying IP addresses (2 points)
+* * Switch -c with -i and -u (3 points)
+* * Built-in command stat for displaying connected clients (3 points)
 */
 
 #include "kshell.h"
@@ -52,14 +52,14 @@
 #include "server.h"
 #include "client.h"
 
-int main_(int argc, char** argv)
+int main(int argc, char** argv)
 {
 	struct arguments args = { argc, argv };
 
 	if (args.count == 1 || is_flag_set(&args, "-h")) {
 		char* help = get_help();
 		puts(help);
-		safe_free((void*)&help);
+		safe_free((void**)&help);
 		return 0;
 	}
 
@@ -81,16 +81,15 @@ int main_(int argc, char** argv)
 	char* target = get_flag_value(&args, "-i");
 	if (target == NULL) {
 		if (is_flag_set(&args, "-p")) {
-			target = "127.0.0.1";
+			target = NULL;
 		}
 		else {
 			target = get_flag_value(&args, "-u");
 			useLocalSocket = true;
+			if (target == NULL) {
+				target = KSHELL_SOCK_PATH;
+			}
 		}
-	}
-	if (target == NULL) {
-		target = KSHELL_SOCK_PATH;
-		useLocalSocket = true;
 	}
 
 	if (serverFlag) {
@@ -110,12 +109,12 @@ char* get_help() {
 		"Usage: kshell <flags> <-c | -s>\n"
 		"Flags:\n"
 		"  -h  - display this help\n"
-		"  -p <port>  - set port number to listen on (default 25566)\n"
-		"  -u <path>  - set path to local socket to listen on (overrides -i and -p)\n"
+		"  -p <port>  - specify port number (default 25566)\n"
+		"  -u <path>  - set path to local socket (overrides -i and -p)\n"
 		"  -i <ip>  - set IP address\n"
 		"  -c  - client mode\n"
 		"  -s  - server mode\n"
-		"Commands:\n"
+		"Built-in commands:\n"
 		"  help  - display this help\n"
 		"  quit  - close remote session\n"
 		"  halt  - close shell server\n" };

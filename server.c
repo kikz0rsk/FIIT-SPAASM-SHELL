@@ -3,6 +3,7 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <netinet/ip.h>
+#include <arpa/inet.h>
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
@@ -22,9 +23,16 @@ void* client_subroutine(void* client_fd);
 void* accept_clients_routine(void* arguments);
 char* build_prompt();
 void execute_command(struct command* command, int clientFd);
+int add_connection(struct connection* con);
+void remove_connection(struct connection* con);
+
+struct connection* connections[20] = { 0 };
+pthread_mutex_t connectionsLock;
 
 int server(struct arguments* args, char* target, int port, bool unix_socket) {
-	int* sockHandle = calloc(1, sizeof(int));
+	pthread_mutex_init(&connectionsLock, NULL);
+
+	int* sockHandle = calloc(2, sizeof(int));
 	struct sockaddr* addr;
 	int sockAddrSize;
 
@@ -42,7 +50,14 @@ int server(struct arguments* args, char* target, int port, bool unix_socket) {
 		*sockHandle = socket(AF_INET, SOCK_STREAM, 0);
 		address->sin_family = AF_INET;
 		address->sin_port = htons(port);
-		address->sin_addr.s_addr = INADDR_ANY;
+
+		if (target == NULL) {
+			address->sin_addr.s_addr = INADDR_ANY;
+		}
+		else {
+			inet_pton(AF_INET, target, &address->sin_addr.s_addr);
+		}
+
 		addr = (struct sockaddr*)address;
 		sockAddrSize = sizeof(struct sockaddr_in);
 	}
@@ -60,6 +75,7 @@ int server(struct arguments* args, char* target, int port, bool unix_socket) {
 	listen(*sockHandle, 10);
 	pthread_t* acceptClientsThread = calloc(1, sizeof(pthread_t));
 
+	*(sockHandle + 1) = unix_socket;
 	pthread_create(acceptClientsThread, NULL, accept_clients_routine, sockHandle);
 
 	return 0;
@@ -67,13 +83,12 @@ int server(struct arguments* args, char* target, int port, bool unix_socket) {
 
 void* accept_clients_routine(void* arguments) {
 	int sockHandle = *(int*)arguments;
+	int unixSocket = *((int*)arguments + 1);
 	while (true) {
-		struct sockaddr_in* caddr = calloc(1, sizeof(struct sockaddr_in));
-		socklen_t len = sizeof(struct sockaddr_in);
+		struct sockaddr* caddr = (struct sockaddr*)calloc(1, sizeof(struct sockaddr_un));
+		socklen_t len = sizeof(struct sockaddr_un);
 
-		int* clientFd = calloc(1, sizeof(int));
-		*clientFd = accept(sockHandle, (struct sockaddr*)caddr, &len);
-
+		int clientFd = accept(sockHandle, caddr, &len);
 		if (clientFd < 0) {
 			perror("Client failed to connect: ");
 			continue;
@@ -81,26 +96,45 @@ void* accept_clients_routine(void* arguments) {
 
 		pthread_t* clientThread = calloc(1, sizeof(pthread_t));
 
-		pthread_create(clientThread, NULL, client_subroutine, clientFd);
+		struct connection* conn = calloc(1, sizeof(struct connection));
+		conn->address = caddr;
+		conn->addressLen = len;
+		conn->thread = clientThread;
+		conn->clientFd = clientFd;
+
+		int index = add_connection(conn);
+		if (index == -1) {
+			char msg[] = "Maximum number of clients reached";
+			write(clientFd, msg, sizeof(msg));
+			close(clientFd);
+
+			free(caddr);
+			free(conn);
+			free(clientThread);
+			continue;
+		}
+
+		pthread_create(clientThread, NULL, client_subroutine, conn);
 	}
 }
 
-void* client_subroutine(void* _clientFd) {
-	int* clientFd = (int*)_clientFd;
+void* client_subroutine(void* _connection) {
+	struct connection* connection = (struct connection*)_connection;
+	int clientFd = connection->clientFd;
 
-	char buffer[1024] = { 0 };
+	char buffer[2048] = { 0 };
 	int bytesRead = 0;
 	while (true)
 	{
 		char* prompt = build_prompt();
-		int res = write(*clientFd, prompt, strlen(prompt) + 1);
-		safe_free((void*)&prompt);
+		int res = write(clientFd, prompt, strlen(prompt) + 1);
+		safe_free((void**)&prompt);
 
 		if (res <= 0) {
 			break;
 		}
 
-		bytesRead = read(*clientFd, &buffer, sizeof(buffer));
+		bytesRead = read(clientFd, &buffer, sizeof(buffer));
 
 		if (bytesRead <= 0) {
 			break;
@@ -110,14 +144,18 @@ void* client_subroutine(void* _clientFd) {
 
 		struct command* command = parse_input(buffer);
 		while (command != NULL) {
-			execute_command(command, *clientFd);
+			execute_command(command, clientFd);
 			struct command* nextCommand = command->nextCommand;
 			free_command(command);
 			command = nextCommand;
 		}
 	}
 
-	free(clientFd);
+	close(clientFd);
+	remove_connection(connection);
+	free(connection->address);
+	free(connection->thread);
+	free(connection);
 }
 
 void execute_command(struct command* command, int clientFd) {
@@ -132,6 +170,32 @@ void execute_command(struct command* command, int clientFd) {
 	else if (strcmp(command->arguments[0], "help") == 0) {
 		char* help = get_help();
 		write(clientFd, help, strlen(help) + 1);
+		return;
+	}
+	else if (strcmp(command->arguments[0], "stat") == 0) {
+		pthread_mutex_lock(&connectionsLock);
+		char* line;
+		for (int i = 0; i < sizeof(connections) / sizeof(struct connection*); i++) {
+			if (connections[i] == NULL) {
+				continue;
+			}
+
+			char string[108] = { 0 };
+			if (connections[i]->addressLen == sizeof(struct sockaddr_in)) {
+				// internet socket
+				struct sockaddr_in* sock = (struct sockaddr_in*)connections[i]->address;
+				inet_ntop(AF_INET, &sock->sin_addr.s_addr, string, sizeof(string));
+			}
+			else {
+				// unix socket
+				struct sockaddr_un* sock = (struct sockaddr_un*)connections[i]->address;
+				inet_ntop(AF_UNIX, &sock->sun_path, string, sizeof(string));
+			}
+
+			asprintf(&line, "%d: %s\n", i, string);
+			write(clientFd, line, strlen(line) + 1);
+		}
+		pthread_mutex_unlock(&connectionsLock);
 		return;
 	}
 
@@ -151,6 +215,7 @@ void execute_command(struct command* command, int clientFd) {
 
 			if (children == 0) {
 				// Child (command after pipe sign)
+				// first pipe for reading
 				dup2(pipes[0], STDIN_FILENO);
 				close(pipes[1]);
 				dup2(clientFd, STDOUT_FILENO);
@@ -162,6 +227,7 @@ void execute_command(struct command* command, int clientFd) {
 			}
 
 			// Parent
+			// second pipe for writing
 			dup2(pipes[1], STDOUT_FILENO);
 			close(pipes[0]);
 			dup2(clientFd, STDERR_FILENO);
@@ -233,4 +299,29 @@ char* build_prompt() {
 	char* prompt;
 	asprintf(&prompt, "%02d:%02d %s@%s# ", localTm.tm_hour, localTm.tm_min, cuserid(NULL), hostname);
 	return prompt;
+}
+
+int add_connection(struct connection* con) {
+	pthread_mutex_lock(&connectionsLock);
+	int index = -1;
+	for (int i = 0; i < sizeof(connections) / sizeof(struct connection*); i++) {
+		if (connections[i] == 0) {
+			connections[i] = con;
+			index = i;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&connectionsLock);
+	return index;
+}
+
+void remove_connection(struct connection* con) {
+	pthread_mutex_lock(&connectionsLock);
+	for (int i = 0; i < sizeof(connections) / sizeof(struct connection*); i++) {
+		if (connections[i] == con) {
+			connections[i] = NULL;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&connectionsLock);
 }

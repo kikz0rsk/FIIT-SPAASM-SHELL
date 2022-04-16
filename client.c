@@ -30,6 +30,9 @@ int client(struct arguments* args, char* target, int port, bool unix_socket) {
 		*sockHandle = socket(AF_INET, SOCK_STREAM, 0);
 		address->sin_family = AF_INET;
 		address->sin_port = htons(port);
+		if (target == NULL) {
+			target = "127.0.0.1";
+		}
 		inet_pton(AF_INET, target, &(address->sin_addr.s_addr));
 		addr = (struct sockaddr*)address;
 		sockAddrSize = sizeof(struct sockaddr_in);
@@ -78,6 +81,6 @@ int client(struct arguments* args, char* target, int port, bool unix_socket) {
 		FD_SET(*sockHandle, &rs);
 	}
 
-	safe_free((void*)&addr);
-	safe_free((void*)&sockHandle);
+	safe_free((void**)&addr);
+	safe_free((void**)&sockHandle);
 }
