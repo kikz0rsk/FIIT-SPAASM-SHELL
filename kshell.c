@@ -130,7 +130,9 @@ char* get_help() {
 		"Built-in commands:\n"
 		"  help  - display this help\n"
 		"  quit  - close remote session\n"
-		"  halt  - close shell server\n" };
+		"  halt  - close shell server\n"
+		"  stat  - display connected clients and their addresses\n"
+	};
 	char* help = malloc(sizeof(helpString) * sizeof(char));
 	memcpy(help, helpString, sizeof(helpString));
 	return help;
