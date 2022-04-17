@@ -127,6 +127,7 @@ char* get_help() {
 		"  -i <ip>  - set IP address\n"
 		"  -c  - client mode\n"
 		"  -s  - server mode\n"
+		"  -d  - run as daemon (possible only with server mode)\n"
 		"Built-in commands:\n"
 		"  help  - display this help\n"
 		"  quit  - close remote session\n"
