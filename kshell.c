@@ -41,12 +41,14 @@
 * * Switch -i for specifying IP addresses (2 points)
 * * Switch -c with -i and -u (3 points)
 * * Built-in command stat for displaying connected clients (3 points)
+* * -d to daemonize the server (4 points)
 */
 
 #include "kshell.h"
 #include "common.h"
 #include "arguments.h"
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include "server.h"
@@ -92,9 +94,20 @@ int main(int argc, char** argv)
 		}
 	}
 
+	bool daemon = false;
+	if (is_flag_set(&args, "-d") && serverFlag) {
+		if (fork() != 0) {
+			return 0;
+		}
+		daemon = true;
+		close(STDIN_FILENO);
+	}
+
 	if (serverFlag) {
-		server(&args, target, port, useLocalSocket);
-		client(&args, target, port, useLocalSocket);
+		server(&args, target, port, useLocalSocket, daemon);
+		if (!daemon) {
+			client(&args, target, port, useLocalSocket);
+		}
 	}
 	else {
 		client(&args, target, port, useLocalSocket);

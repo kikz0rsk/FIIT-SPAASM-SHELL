@@ -29,7 +29,7 @@ void remove_connection(struct connection* con);
 struct connection* connections[20] = { 0 };
 pthread_mutex_t connectionsLock;
 
-int server(struct arguments* args, char* target, int port, bool unix_socket) {
+int server(struct arguments* args, char* target, int port, bool unix_socket, bool daemon) {
 	pthread_mutex_init(&connectionsLock, NULL);
 
 	int* sockHandle = calloc(2, sizeof(int));
@@ -73,11 +73,16 @@ int server(struct arguments* args, char* target, int port, bool unix_socket) {
 	}
 
 	listen(*sockHandle, 10);
-	pthread_t* acceptClientsThread = calloc(1, sizeof(pthread_t));
 
 	*(sockHandle + 1) = unix_socket;
-	pthread_create(acceptClientsThread, NULL, accept_clients_routine, sockHandle);
-
+	if (daemon) {
+		accept_clients_routine((void*)sockHandle);
+	}
+	else {
+		pthread_t* acceptClientsThread = calloc(1, sizeof(pthread_t));
+		pthread_create(acceptClientsThread, NULL, accept_clients_routine, sockHandle);
+	}
+	
 	return 0;
 }
 
@@ -189,7 +194,7 @@ void execute_command(struct command* command, int clientFd) {
 			else {
 				// unix socket
 				struct sockaddr_un* sock = (struct sockaddr_un*)connections[i]->address;
-				inet_ntop(AF_UNIX, &sock->sun_path, string, sizeof(string));
+				strcpy(string, sock->sun_path);
 			}
 
 			asprintf(&line, "%d: %s\n", i, string);
@@ -207,13 +212,13 @@ void execute_command(struct command* command, int clientFd) {
 			int pipes[2];
 			pipe(pipes);
 
-			pid_t children = fork();
-			if (children < 0) {
+			pid_t pid = fork();
+			if (pid < 0) {
 				perror("pipe fork");
 				exit(-1);
 			}
 
-			if (children == 0) {
+			if (pid == 0) {
 				// Child (command after pipe sign)
 				// first pipe for reading
 				dup2(pipes[0], STDIN_FILENO);

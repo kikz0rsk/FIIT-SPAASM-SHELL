@@ -12,4 +12,4 @@ struct connection {
 	int clientFd;
 };
 
-int server(struct arguments* args, char* target, int port, bool unix_socket);
+int server(struct arguments* args, char* target, int port, bool unix_socket, bool daemon);
